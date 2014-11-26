@@ -4,7 +4,7 @@ Currently this has a Combiner-type iterator in the style of StatsCombiner called
 
 [![Build Status](https://travis-ci.org/Stevens-GraphGroup/HBaaS-Ingester.svg)](https://travis-ci.org/Stevens-GraphGroup/HBaaS-Ingester)
 
-
+[![Build Status](https://api.shippable.com/projects/547518e9d46935d5fbbe9951/badge?branchName=master)](https://app.shippable.com/projects/547518e9d46935d5fbbe9951/builds/latest)
 
 `mvn package -DskipTests=true` to compile and build JARs.
 

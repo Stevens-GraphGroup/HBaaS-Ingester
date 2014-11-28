@@ -100,6 +100,8 @@ public class ProteinSeqIngest {
 
     /** Flush buffered data to Accumulo if it exceeds the batch amount. */
     private void checkFlushBuffers() throws MutationsRejectedException {
+        if (state != State.Open)
+            throw new IllegalStateException("checking to flush buffer when not open");
         if (TseqBytes >= batchBytes) {
             Bseq.flush();
             TseqBytes = 0l;
@@ -112,6 +114,19 @@ public class ProteinSeqIngest {
             BseqRaw.flush();
             TseqRawBytes = 0l;
         }
+    }
+
+    public void flushBuffers() {
+        if (state != State.Open)
+            throw new IllegalStateException("flushing buffer when not open");
+        try {
+            Bseq.flush();
+            BseqT.flush();
+            BseqRaw.flush();
+        } catch (MutationsRejectedException e) {
+            e.printStackTrace();
+        }
+        TseqBytes = TseqTBytes = TseqRawBytes = 0l;
     }
 
     /**

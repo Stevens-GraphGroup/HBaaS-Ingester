@@ -6,14 +6,13 @@ import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.*;
 import org.apache.accumulo.core.iterators.Combiner;
 import org.apache.accumulo.core.iterators.IteratorUtil;
-import org.apache.accumulo.core.iterators.LongCombiner;
-import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
@@ -156,4 +155,52 @@ public class MiniTest {
 
         conn.tableOperations().delete(tableName);
     }
+
+    @Test
+    public void testInsertProteinFile() throws AccumuloSecurityException, AccumuloException, TableNotFoundException {
+        File f = TestFileReader.getTestFile("gbpri1_cut.fsa_aa");
+        Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
+        MassProteinSeqIngest ingest = new MassProteinSeqIngest(conn);
+        ingest.insertFile(f);
+
+        // read back
+        Scanner scan = conn.createScanner("TseqRaw", Authorizations.EMPTY);
+//        Key startKey = new Key(new Text("d"), cf, cq);
+//        Range rng = new Range(startKey,null,true,false,false,true);
+//        scan.setRange(rng);// (new Key("d"));
+//        System.out.println(tableName+" table:");
+//        Iterator<Map.Entry<Key, Value>> iterator = scan.iterator();
+//        Key k2 = new Key(new Text("ddd"), cf, cq);
+//        Key k3 = new Key(new Text("pogo"), cf, cq);
+//        Map.Entry<Key, Value> r1 = iterator.next();
+//        assertTrue(k2.equals(r1.getKey(), PartialKey.ROW_COLFAM_COLQUAL_COLVIS));
+//        assertEquals(v,r1.getValue());
+//        Map.Entry<Key, Value> r2 = iterator.next();
+//        assertTrue(k3.equals(r2.getKey(),PartialKey.ROW_COLFAM_COLQUAL_COLVIS));
+//        assertEquals(v,r2.getValue());
+//        assertFalse(iterator.hasNext());
+
+        System.out.println("TseqRaw:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("Tseq",Authorizations.EMPTY);
+        System.out.println("Tseq   :  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("TseqT",Authorizations.EMPTY);
+        System.out.println("TseqT  :  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+
+        conn.tableOperations().delete("TseqRaw");
+        conn.tableOperations().delete("Tseq");
+        conn.tableOperations().delete("TseqT");
+    }
+
 }

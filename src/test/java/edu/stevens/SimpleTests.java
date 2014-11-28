@@ -43,15 +43,15 @@ public class SimpleTests {
         int i = 1;
         for (Map.Entry<String, ProteinSequence> entry : sequenceMap.entrySet()) {
             ProteinSequence ps = entry.getValue();
-            System.out.println("Entry " + i + " " + entry.getKey()
-//                            + "\n\t" + ps.getSource()   // null
-//                            + "\n\t" + ps.getTaxonomy() // null
-//                            + "\n\t" + ps.getDescription() // null
-                            + "\n\t" + ps.getOriginalHeader()
-                            + "\n\t" + ps.getAccession() // BAC05839.1
-//                            + "\n\t" + ps.getAnnotationType() // UNKNOWN
-                            + "\n\t" + ps.getSequenceAsString()
-            );
+//            System.out.println("Entry " + i + " " + entry.getKey()
+////                            + "\n\t" + ps.getSource()   // null
+////                            + "\n\t" + ps.getTaxonomy() // null
+////                            + "\n\t" + ps.getDescription() // null
+//                            + "\n\t" + ps.getOriginalHeader()
+//                            + "\n\t" + ps.getAccession() // BAC05839.1
+////                            + "\n\t" + ps.getAnnotationType() // UNKNOWN
+//                            + "\n\t" + ps.getSequenceAsString()
+//            );
             String header = ps.getOriginalHeader();
             int splitSpace = header.indexOf(' ');
             String seqID = splitSpace == -1 ? header : header.substring(0, splitSpace);
@@ -65,14 +65,19 @@ public class SimpleTests {
             String giID = parts[0] + '|'+parts[1];
             String dbID = parts[2]+'|'+parts[3];
             String ascID = parts[3];
-            System.out.println("\t\tdbID     :"+giID);
-            System.out.println("\t\torgID    :"+dbID);
-            System.out.println("\t\tgenbankID:"+ascID);
+//            System.out.println("\t\tgiID     :"+giID);  //gi|21928500
+//            System.out.println("\t\tdbID     :"+dbID);  //dbj|BAC05839.1
+//            System.out.println("\t\tascID    :"+ascID); //BAC05839.1
+            Assert.assertEquals("gi|21928500",giID);
+            Assert.assertEquals("dbj|BAC05839.1",dbID);
+            Assert.assertEquals("BAC05839.1",ascID);
+            Assert.assertEquals("BAC05839.1",ps.getAccession().getID());
 
-            String desc = header.substring(splitSpace + 1);
-            System.out.println("\t\t" + seqID);
-            System.out.println("\t\t" + desc);
+            String desc = header.substring(splitSpace + 1).trim(); // remove surrounding whitespace
+//            System.out.println("\t\t" + seqID);         //gi|21928500|dbj|BAC05839.1|
+//            System.out.println("\t\t" + desc);          //seven transmembrane helix receptor, partial [Homo sapiens]
             i++;
+            break; // only do first entry
         }
 
     }

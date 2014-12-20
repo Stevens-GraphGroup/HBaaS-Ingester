@@ -197,10 +197,17 @@ public class MiniTest {
             System.out.println(kv);
         }
         scan.close();
+        scan = conn.createScanner("TseqTDeg",Authorizations.EMPTY);
+        System.out.println("TseqTDeg  :  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
 
         conn.tableOperations().delete("TseqRaw");
         conn.tableOperations().delete("Tseq");
         conn.tableOperations().delete("TseqT");
+        conn.tableOperations().delete("TseqTDeg");
     }
 
 }

@@ -9,6 +9,8 @@ import org.apache.accumulo.core.iterators.LongCombiner;
 import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.io.Text;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.biojava3.core.sequence.ProteinSequence;
 
 import java.util.Collections;
@@ -17,6 +19,7 @@ import java.util.Collections;
  * Insert protein seqeunces into Accumulo following the schema in the project docs.
  */
 public class ProteinSeqIngest {
+    private static final Logger log = LogManager.getLogger(ProteinSeqIngest.class);
     final String    TNseq = "Tseq",
                     TNseqT = "TseqT",
                     TNseqRaw = "TseqRaw",
@@ -94,7 +97,7 @@ public class ProteinSeqIngest {
             BseqTDeg = connector.createBatchWriter(TNseqTDeg, BWconfig);
         } catch (TableNotFoundException e) {
             e.printStackTrace();
-            //log.critical("tables should have been created!");
+            log.error("tables should have been created!", e);
             assert false;
         }
         TseqBytes = TseqTBytes = TseqRawBytes = TseqTDegBytes = 0l;
@@ -216,13 +219,13 @@ public class ProteinSeqIngest {
         String seqID = splitSpace == -1 ? header : header.substring(0, splitSpace);
         String[] parts = seqID.split("\\|");
         if (parts.length >= 4 && parts[0].equals("gi") && parts[3].equals(accID)) {
-            //if (parts[1].length() > 9)  log("warning: the sequence "+accID+" has a gi of "+parts[1]+" which is greater than "+PADLENGTH_gi+" characters. Reset the PADLENGTH.");
+            if (parts[1].length() > 9)  log.warn("warning: the sequence " + accID + " has a gi of " + parts[1] + " which is greater than " + PADLENGTH_gi + " characters. Reset the PADLENGTH.");
             String giID = "gi|" + StringUtils.leftPad(parts[1],PADLENGTH_gi,'0');  // pad to 9 digits
             String dbID = "db|" + parts[2] + '|' + accID;
             String desc = header.substring(splitSpace + 1).trim(); // remove surrounding whitespace
             putSeqParts(accIDfull, ps.getSequenceAsString(), desc, giID, dbID);
         } else {
-            //log.warn("bad original header on protein sequence: "+header);
+            log.warn("bad original header on protein sequence: "+header);
             putSeqParts(accIDfull, ps.getSequenceAsString(), header);
         }
     }

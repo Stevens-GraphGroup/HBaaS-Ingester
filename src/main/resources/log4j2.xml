@@ -4,7 +4,7 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{DATE} %p - %C{1}.%M(%L) -  %m%n"/>
         </Console>
-        <File name="File1" fileName="logs/HBaaS-Ingester.log" bufferedIO="true" append="false">
+        <File name="File1" fileName="logs/HBaaS-Ingester.log4j2.log" bufferedIO="true" append="false">
             <PatternLayout>
                 <Pattern>%d{DATE} %-5p [%t] %c - %n\t\t%m%n</Pattern> <!--%d %p %c{1.} [%t] %m%n-->
             </PatternLayout>

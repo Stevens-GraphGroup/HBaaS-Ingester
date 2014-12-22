@@ -26,9 +26,6 @@ public class MassProteinSeqIngest {
     public long getSeqsIngested() {
         return seqsIngested;
     }
-    public void setSeqsIngested(long seqsIngested) {
-        this.seqsIngested = seqsIngested;
-    }
 
     public MassProteinSeqIngest(Connector connector) {
         //this.connector = connector;
@@ -38,7 +35,7 @@ public class MassProteinSeqIngest {
     public void insertFile(File file) {
         if (!file.exists() || !file.isFile())
             throw new IllegalArgumentException("please pass a protein sequence file (can be gzipped)");
-        psi.openIngest();
+//        psi.openIngest();  This is done automatically.
         try { insertFileInner(file); }
         finally {
             psi.closeIngest();
@@ -91,7 +88,7 @@ public class MassProteinSeqIngest {
     public void insertDirectory(File dir) {
         if (!dir.exists() || !dir.isDirectory())
             throw new IllegalArgumentException("please pass in a directory");
-        psi.openIngest();
+//        psi.openIngest();
         try { insertDirectoryInner(dir); }
         finally {
             psi.closeIngest();

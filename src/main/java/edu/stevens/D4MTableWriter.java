@@ -23,6 +23,8 @@ import java.util.Collections;
 public class D4MTableWriter {
     private static final Logger log = LogManager.getLogger(TableWriter.class);
 
+    private TableWriter.State state;
+
     public static final Text DEFAULT_DEGCOL = new Text("deg");
     public static class D4MTableConfig implements Cloneable {
         public boolean
@@ -61,6 +63,7 @@ public class D4MTableWriter {
             tableT=null,
             tableDeg=null,
             tableTDeg=null;
+    private MultiTableBatchWriter mtbw;
 
     public static TableWriter.AfterTableCreate makeDegreeATC(final Text cf, final Text degCol) {
         return new TableWriter.AfterTableCreate() {
@@ -83,15 +86,32 @@ public class D4MTableWriter {
 
     public D4MTableWriter(String baseName, Connector conn, D4MTableConfig config) {
         d4MTableConfig = new D4MTableConfig(config); // no aliasing
-        if (config.useTable   ) table =    new TableWriter(baseName,conn,config.batchBytes);
-        if (config.useTableT  ) tableT =   new TableWriter(baseName+"T",conn,config.batchBytes);
+        BatchWriterConfig BWconfig = new BatchWriterConfig();
+        BWconfig.setMaxMemory(config.batchBytes);
+        mtbw = conn.createMultiTableBatchWriter(BWconfig);
+
+        TableWriter.BatchWriterCreate btc = new TableWriter.BatchWriterCreate() {
+            @Override
+            public BatchWriter createBatchWriter(String tableName, Connector c) throws TableNotFoundException {
+                try {
+                    return mtbw.getBatchWriter(tableName);
+                } catch (AccumuloException | AccumuloSecurityException e) {
+                    log.warn("unable to create batch writer for table "+tableName, e);
+                    return null;
+                }
+            }
+        };
+
+        if (config.useTable   ) table =    new TableWriter(baseName,conn, btc);
+        if (config.useTableT  ) tableT =   new TableWriter(baseName+"T",conn,btc);
         TableWriter.AfterTableCreate atc = makeDegreeATC(CF, d4MTableConfig.textDegCol);
         if (config.useTableDeg) {
-            tableDeg = new TableWriter(baseName+"Deg", conn, atc, config.batchBytes);
+            tableDeg = new TableWriter(baseName+"Deg", conn, atc, btc);
         }
         if (config.useTableTDeg) {
-            tableTDeg = new TableWriter(baseName + "TDeg", conn, atc, config.batchBytes);
+            tableTDeg = new TableWriter(baseName + "TDeg", conn, atc, btc);
         }
+
     }
 
 
@@ -122,6 +142,11 @@ public class D4MTableWriter {
         if (tableT != null) tableT.closeIngest();
         if (tableDeg != null) tableDeg.closeIngest();
         if (tableTDeg != null) tableTDeg.closeIngest();
+        try {
+            mtbw.close();
+        } catch (MutationsRejectedException e) {
+            log.warn("error closing multi table writer for D4MTableWriter",e);
+        }
     }
 
     /** Use "1" as the Value. */

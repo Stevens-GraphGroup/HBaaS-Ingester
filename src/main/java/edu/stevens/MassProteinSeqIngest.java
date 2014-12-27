@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
 /**
- *
+ * Insert all the protein sequences in a file or folder.
  */
 public class MassProteinSeqIngest {
     private ProteinSeqIngest psi;

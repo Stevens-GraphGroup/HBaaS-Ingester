@@ -26,7 +26,7 @@ public class TableWriter {
     private BatchWriter BW=null;
     private AfterTableCreate atc=null;
 
-    public static enum State { New, Open, Closed };
+    static enum State { New, Open, Closed };
     private State state = State.New;
     State getState() { return state; }
 
@@ -35,25 +35,8 @@ public class TableWriter {
         public void afterTableCreate(String tableName, Connector c);
     }
 
-    /** A method to create a batch writer. Two use cases: create a plain old bw,
-     * and create one from a MultiTableBatchWriter. */
-    public static interface BatchWriterCreate {
-        public BatchWriter createBatchWriter(String tableName, Connector c) throws TableNotFoundException;
-    }
-    private BatchWriterCreate batchWriterCreate;
-    public static BatchWriterCreate createRegularBatchWriter(final long batchBytes) {
-        return new BatchWriterCreate() {
-            @Override
-            public BatchWriter createBatchWriter(String tableName, Connector c) throws TableNotFoundException {
-                BatchWriterConfig BWconfig = new BatchWriterConfig();
-                BWconfig.setMaxMemory(batchBytes); // bytes available to batchwriter for buffering mutations
-                return c.createBatchWriter(tableName, BWconfig);
-            }
-        };
-    }
-
     /** The number of bytes until we flush data to the server. */
-    public final static long DEFAULT_BATCHBYTES = 2_000_000L;
+    private long batchBytes = 2_000_000L;
 
     private long totalBytesToWrite = 0l;
     public long getTotalBytesToWrite() { return totalBytesToWrite; }
@@ -61,23 +44,39 @@ public class TableWriter {
     public TableWriter(String name, Connector conn) {
         this.name = name;
         this.connector = conn;
-        batchWriterCreate = createRegularBatchWriter(DEFAULT_BATCHBYTES);
     }
 
-    public TableWriter(String name, Connector conn, BatchWriterCreate bwc) {
+    public TableWriter(String name, Connector conn, long batchBytes) {
         this(name,conn);
-        batchWriterCreate = bwc;
+        this.batchBytes = batchBytes;
     }
 
     public TableWriter(String name, Connector conn, AfterTableCreate atc) {
         this(name,conn);
         this.atc = atc;
-        batchWriterCreate = createRegularBatchWriter(DEFAULT_BATCHBYTES);
     }
 
-    public TableWriter(String name, Connector conn, AfterTableCreate atc, BatchWriterCreate bwc) {
+    public TableWriter(String name, Connector conn, AfterTableCreate atc, long batchBytes) {
         this(name,conn,atc);
-        batchWriterCreate = bwc;
+        this.batchBytes = batchBytes;
+    }
+
+    /** Create a table if not already existing. */
+    public static boolean createTableSoft(String tableName, Connector c) {
+        TableOperations to = c.tableOperations();
+        try {
+            if (!to.exists(tableName)) {
+                to.create(tableName);
+                return true;
+            } else
+                return false;
+        } catch (AccumuloException | AccumuloSecurityException e) {
+            log.warn("error creating table "+tableName,e);
+            return false;
+        } catch (TableExistsException e) {
+            log.error("impossible! Table checked to be created!", e);
+            return false;
+        }
     }
 
     /**
@@ -85,18 +84,10 @@ public class TableWriter {
      * Call the atc if provided.
      */
     public void createTablesSoft() {
-        TableOperations to = connector.tableOperations();
-        try {
-            if (!to.exists(name))
-                to.create(name);
-            // Add iterators and such
-            if (atc != null)
-                atc.afterTableCreate(name, connector);
-        } catch (AccumuloException | AccumuloSecurityException e) {
-            e.printStackTrace();
-        } catch (TableExistsException e) {
-            log.error("impossible! Table checked to be created!", e);
-        }
+        boolean created = createTableSoft(name, connector);
+        // Add iterators and such
+        if (created && atc != null)
+            atc.afterTableCreate(name, connector);
     }
 
     public void openIngest() {
@@ -106,8 +97,10 @@ public class TableWriter {
             case Closed: break;
         }
 
+        BatchWriterConfig BWconfig = new BatchWriterConfig();
+        BWconfig.setMaxMemory(batchBytes); // bytes available to batchwriter for buffering mutations
         try {
-            BW = batchWriterCreate.createBatchWriter(name, connector);
+            BW = connector.createBatchWriter(name, BWconfig);
         } catch (TableNotFoundException e) {
             log.error("impossible! Tables should have been created!", e);
         }
@@ -126,13 +119,20 @@ public class TableWriter {
         state = State.Closed;
     }
 
+    @Override
+    public void finalize() throws Throwable {
+        super.finalize();
+        if (state == State.Open)
+            closeIngest();
+    }
+
     public void flushBuffer() {
         if (state != State.Open)
             throw new IllegalStateException("flushing buffer when not open");
         try {
             BW.flush();
         } catch (MutationsRejectedException e) {
-            e.printStackTrace();
+            log.warn("mutations rejected while flushing", e);
         }
     }
 

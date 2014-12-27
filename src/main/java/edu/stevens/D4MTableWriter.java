@@ -2,6 +2,7 @@ package edu.stevens;
 
 
 import org.apache.accumulo.core.client.*;
+import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.Combiner;
 import org.apache.accumulo.core.iterators.LongCombiner;
@@ -11,6 +12,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
+import static edu.stevens.TableWriter.State;
+import static edu.stevens.TableWriter.createTableSoft;
 
 /**
  * Wrapper around the following tables:
@@ -23,97 +26,84 @@ import java.util.Collections;
 public class D4MTableWriter {
     private static final Logger log = LogManager.getLogger(TableWriter.class);
 
-    private TableWriter.State state;
+    private State state = State.New;
 
     public static final Text DEFAULT_DEGCOL = new Text("deg");
+
+    /** Holds configuration options to pass to constructor of D4MTableWriter. */
     public static class D4MTableConfig implements Cloneable {
+        public String baseName;
+        public Connector connector;
         public boolean
                 useTable = false,
                 useTableT = false,
                 useTableDeg = false,
                 useTableTDeg = false;
         public Text textDegCol = DEFAULT_DEGCOL;
+        public Text cf = TableWriter.EMPTYCF;
         /** The number of bytes until we flush data to the server. */
         public long batchBytes = 2_000_000L;
 
         public D4MTableConfig() {}
 
         public D4MTableConfig(D4MTableConfig c) {
+            baseName = c.baseName;
+            connector = c.connector;
             useTable = c.useTable;
             useTableT = c.useTableT;
             useTableDeg = c.useTableDeg;
             useTableTDeg = c.useTableTDeg;
             textDegCol = c.textDegCol;
             batchBytes = c.batchBytes;
+            cf = c.cf;
         }
-
-//        @Override
-//        public D4MTableConfig clone() throws CloneNotSupportedException {
-//            return (D4MTableConfig)super.clone();
-//        }
     }
-    private D4MTableConfig d4MTableConfig;
+    private final D4MTableConfig tconf;
 
-    private Text CF = TableWriter.EMPTYCF;
-    public Text getCF() {return CF;}
-    public void setCF(Text CF) {this.CF = CF;}
-
-    private TableWriter
-            table=null,
-            tableT=null,
-            tableDeg=null,
-            tableTDeg=null;
+    private String TNtable,TNtableT,TNtableDeg,TNtableTDeg;
+    private BatchWriter
+            Btable=null,
+            BtableT=null,
+            BtableDeg=null,
+            BtableTDeg=null;
     private MultiTableBatchWriter mtbw;
+
+    public static void assignDegreeAccumulator(Text cf, Text degCol, String tableName, Connector c) {
+        IteratorSetting cfg = new IteratorSetting(19, "sum_"+cf+'_'+degCol, SummingCombiner.class);
+        Combiner.setColumns(cfg, Collections.singletonList(new IteratorSetting.Column(cf, degCol)));
+        Combiner.setCombineAllColumns(cfg, false);
+        LongCombiner.setEncodingType(cfg, LongCombiner.Type.STRING);
+        try {
+            c.tableOperations().attachIterator(tableName, cfg);
+        } catch (AccumuloSecurityException | AccumuloException e) {
+            log.warn("error trying to add iterator to "+tableName, e);
+        } catch (TableNotFoundException e) {
+            log.error("impossible!",e);
+        }
+    }
 
     public static TableWriter.AfterTableCreate makeDegreeATC(final Text cf, final Text degCol) {
         return new TableWriter.AfterTableCreate() {
             @Override
             public void afterTableCreate(String tableName, Connector c) {
-                IteratorSetting cfg = new IteratorSetting(19, "sum", SummingCombiner.class);
-                Combiner.setColumns(cfg, Collections.singletonList(new IteratorSetting.Column(cf, degCol)));
-                Combiner.setCombineAllColumns(cfg, false);
-                LongCombiner.setEncodingType(cfg, LongCombiner.Type.STRING);
-                try {
-                    c.tableOperations().attachIterator(tableName, cfg);
-                } catch (AccumuloSecurityException | AccumuloException e) {
-                    log.warn("error trying to add iterator to "+tableName, e);
-                } catch (TableNotFoundException e) {
-                    log.error("impossible!",e);
-                }
+                assignDegreeAccumulator(cf, degCol, tableName, c);
             }
         };
     }
 
-    public D4MTableWriter(String baseName, Connector conn, D4MTableConfig config) {
-        d4MTableConfig = new D4MTableConfig(config); // no aliasing
-        BatchWriterConfig BWconfig = new BatchWriterConfig();
-        BWconfig.setMaxMemory(config.batchBytes);
-        mtbw = conn.createMultiTableBatchWriter(BWconfig);
-
-        TableWriter.BatchWriterCreate btc = new TableWriter.BatchWriterCreate() {
-            @Override
-            public BatchWriter createBatchWriter(String tableName, Connector c) throws TableNotFoundException {
-                try {
-                    return mtbw.getBatchWriter(tableName);
-                } catch (AccumuloException | AccumuloSecurityException e) {
-                    log.warn("unable to create batch writer for table "+tableName, e);
-                    return null;
-                }
-            }
-        };
-
-        if (config.useTable   ) table =    new TableWriter(baseName,conn, btc);
-        if (config.useTableT  ) tableT =   new TableWriter(baseName+"T",conn,btc);
-        TableWriter.AfterTableCreate atc = makeDegreeATC(CF, d4MTableConfig.textDegCol);
-        if (config.useTableDeg) {
-            tableDeg = new TableWriter(baseName+"Deg", conn, atc, btc);
-        }
-        if (config.useTableTDeg) {
-            tableTDeg = new TableWriter(baseName + "TDeg", conn, atc, btc);
-        }
-
+    /** All values from the config object are copied. */
+    public D4MTableWriter(D4MTableConfig config) {
+        tconf = new D4MTableConfig(config); // no aliasing
+        initBaseBames(tconf.baseName);
+        openIngest();
     }
 
+    private void initBaseBames(String baseName) {
+        if (tconf.useTable)     TNtable=baseName;
+        if (tconf.useTableT)    TNtableT=baseName+"T";
+        if (tconf.useTableDeg)  TNtableDeg=baseName+"Deg";
+        if (tconf.useTableTDeg) TNtableTDeg=baseName + "TDeg";
+    }
 
 
     /**
@@ -121,32 +111,71 @@ public class D4MTableWriter {
      * Sets up iterators on degree tables if enabled.
      */
     public void createTablesSoft() {
-        if (table != null) table.createTablesSoft();
-        if (tableT != null) tableT.createTablesSoft();
-        if (tableDeg != null) tableDeg.createTablesSoft();
-        if (tableTDeg != null) tableTDeg.createTablesSoft();
+        boolean btDeg=false, btTDeg=false;
+        if (tconf.useTable)     createTableSoft(TNtable, tconf.connector);
+        if (tconf.useTableT)     createTableSoft(TNtableT, tconf.connector);
+        if (tconf.useTableDeg)  btDeg = createTableSoft(TNtableDeg, tconf.connector);
+        if (tconf.useTableTDeg) btTDeg = createTableSoft(TNtableTDeg, tconf.connector);
+        if (btDeg)  assignDegreeAccumulator(tconf.cf, tconf.textDegCol, TNtableDeg, tconf.connector);
+        if (btTDeg) assignDegreeAccumulator(tconf.cf, tconf.textDegCol, TNtableTDeg, tconf.connector);
+    }
+
+    public void openIngest() {
+        switch(state) {
+            case New: createTablesSoft(); break;
+            case Open: throw new IllegalStateException("tried to open ingset when already open");
+            case Closed: break;
+        }
+
+        BatchWriterConfig BWconfig = new BatchWriterConfig();
+        BWconfig.setMaxMemory(tconf.batchBytes);
+        mtbw = tconf.connector.createMultiTableBatchWriter(BWconfig);
+        try {
+            if (tconf.useTable) Btable         = mtbw.getBatchWriter(TNtable);
+            if (tconf.useTableT) BtableT       = mtbw.getBatchWriter(TNtableT);
+            if (tconf.useTableDeg) BtableDeg   = mtbw.getBatchWriter(TNtableDeg);
+            if (tconf.useTableTDeg) BtableTDeg = mtbw.getBatchWriter(TNtableTDeg);
+        } catch (TableNotFoundException e) {
+            log.error("impossible! Tables should have been created!", e);
+        } catch (AccumuloSecurityException | AccumuloException e) {
+            log.warn("error creating one of the batch writers for D4MTableWriter base " + TNtable, e);
+        }
+        state = State.Open;
     }
 
     public void flushBuffers() {
-        if (table != null) table.flushBuffer();
-        if (tableT != null) tableT.flushBuffer();
-        if (tableDeg != null) tableDeg.flushBuffer();
-        if (tableTDeg != null) tableTDeg.flushBuffer();
+        if (state != State.Open)
+            throw new IllegalStateException("flushing buffer when not open");
+        try {
+            mtbw.flush();
+        } catch (MutationsRejectedException e) {
+            log.warn("mutations rejected while flushing",e);
+        }
     }
 
     /**
      * Close all enabled table batch writers.
      */
     public void closeIngest() {
-        if (table != null) table.closeIngest();
-        if (tableT != null) tableT.closeIngest();
-        if (tableDeg != null) tableDeg.closeIngest();
-        if (tableTDeg != null) tableTDeg.closeIngest();
+        if (state != State.Open)
+            throw new IllegalStateException("tried to close when already closed");
+        Btable     = null;
+        BtableT    = null;
+        BtableDeg  = null;
+        BtableTDeg = null;
         try {
             mtbw.close();
         } catch (MutationsRejectedException e) {
             log.warn("error closing multi table writer for D4MTableWriter",e);
         }
+        state = State.Closed;
+    }
+
+    @Override
+    public void finalize() throws Throwable {
+        super.finalize();
+        if (state == State.Open)
+            closeIngest();
     }
 
     /** Use "1" as the Value. */
@@ -155,11 +184,21 @@ public class D4MTableWriter {
     }
     /** Ingest to all enabled tables. Use "1" for the degree table values. */
     public void ingestRow(Text rowID, Text cq, Value v) {
-        if (table != null) table        .ingestRow(rowID, CF, cq, v);
-        if (tableT != null) tableT      .ingestRow(cq, CF, rowID, v);
-        if (tableDeg != null) tableDeg  .ingestRow(rowID, CF, d4MTableConfig.textDegCol, TableWriter.VALONE);
-        if (tableTDeg != null) tableTDeg.ingestRow(cq, CF, d4MTableConfig.textDegCol, TableWriter.VALONE);
+        if (state != State.Open)
+            openIngest();
+        if (tconf.useTable)     ingestRow(Btable    , rowID, tconf.cf, cq, v);
+        if (tconf.useTableT)    ingestRow(BtableT   , cq, tconf.cf, rowID, v);
+        if (tconf.useTableDeg)  ingestRow(BtableDeg , rowID, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
+        if (tconf.useTableTDeg) ingestRow(BtableTDeg, cq, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
     }
 
-
+    public static void ingestRow(BatchWriter bw, Text rowID, Text cf, Text cq, Value v) {
+        Mutation m = new Mutation(rowID);
+        m.put(cf, cq, v);
+        try {
+            bw.addMutation(m);
+        } catch (MutationsRejectedException e) {
+            log.warn("mutation rejected: (row,cf,cq,v)=("+rowID+','+cf+','+cq+','+v+")",e);
+        }
+    }
 }

@@ -28,8 +28,10 @@ public class ProteinSeqIngest {
         D4MTableWriter.D4MTableConfig config = new D4MTableWriter.D4MTableConfig();
         config.useTable = config.useTableT  = true;
         config.useTableTDeg = config.useTableDeg = false;
-        d4MTables = new D4MTableWriter("Tseq",conn,config);
-        d4MTables.setCF(CF);
+        config.connector = conn;
+        config.baseName = "Tseq";
+        config.cf = CF;
+        d4MTables = new D4MTableWriter(config);
         TseqRaw = new TableWriter("TseqRaw",conn);
         TseqTDeg = new TableWriter("TseqTDeg",conn,D4MTableWriter.makeDegreeATC(CF,CQdeg));
     }

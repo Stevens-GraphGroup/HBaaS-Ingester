@@ -13,6 +13,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
@@ -208,6 +209,32 @@ public class MiniTest {
         conn.tableOperations().delete("Tseq");
         conn.tableOperations().delete("TseqT");
         conn.tableOperations().delete("TseqTDeg");
+    }
+
+    @Test
+    public void testInsertNodeData() throws AccumuloSecurityException, AccumuloException, IOException, TableNotFoundException {
+        File f = TestFileReader.getTestFile("nodes_cut.dmp");
+        Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
+        Map<Integer, String> divMap = DivisionReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
+        NodesReader nr = new NodesReader(divMap, conn);
+        nr.ingestFile(f);
+
+        // read back
+        Scanner scan = conn.createScanner("Ttax", Authorizations.EMPTY);
+        System.out.println("Ttax:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("TtaxT", Authorizations.EMPTY);
+        System.out.println("TtaxT:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+
+        conn.tableOperations().delete("Ttax");
+        conn.tableOperations().delete("TtaxT");
     }
 
 }

@@ -7,6 +7,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Map;
 
 /**
  * Hello world!
@@ -46,10 +49,30 @@ public class App
     }
 
     /** Need divisions.dmp, nodes.dmp, names.dmp */
-    public static void ingestTaxNames(File dir) {
+    public static void ingestTaxNames(File dir) throws IOException {
         log.info("START ingestTaxNames: "+dir);
         Connector conn = setupAccumuloConnector();
+
+        File fDiv = new File(dir, "division.dmp");
+        if (!fDiv.exists())
+            throw new FileNotFoundException("division.dmp is not in dir: "+dir);
+        File fNodes = new File(dir, "nodes.dmp");
+        if (!fNodes.exists())
+            throw new FileNotFoundException("nodes.dmp is not in dir: "+dir);
+        File fNames = new File(dir, "names.dmp");
+        if (!fNames.exists())
+            throw new FileNotFoundException("names.dmp is not in dir: "+dir);
+
+        Map<Integer, String> divMap = DivisionReader.readDivisions(fDiv);
+        log.info("ingestTaxNames: finished division.dmp");
+
+        NodesReader nr = new NodesReader(divMap, conn);
+        nr.ingestFile(fNodes);
+        log.info("ingestTaxNames: finished nodes.dmp");
+
         throw new RuntimeException("not yet implemented");
+
+        //log.info("ingestTaxNames: finished names.dmp");
     }
 
     /** Need gi_taxid_prot.dmp */
@@ -75,7 +98,7 @@ public class App
         System.exit(1);
     }
 
-    public static void main( String[] args ) throws AccumuloSecurityException, AccumuloException {
+    public static void main( String[] args ) throws AccumuloSecurityException, AccumuloException, IOException {
         Options options = new Options();
         Option o1 = new Option("w", true, "what to do (ingestProteins,ingestTaxNames,ingestTaxLink)");
         o1.setRequired(true);

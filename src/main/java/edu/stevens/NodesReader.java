@@ -3,6 +3,8 @@ package edu.stevens;
 import org.apache.accumulo.core.client.Connector;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.io.Text;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.*;
 import java.util.HashMap;
@@ -10,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 public class NodesReader {
-
+    private static final Logger log = LogManager.getLogger(NodesReader.class);
     private final Map<Integer, String> divInfo;
     private final Connector connector;
     private final D4MTableWriter d4mtw;
@@ -29,10 +31,13 @@ public class NodesReader {
     public void ingestFile(File file) throws IOException {
         BufferedReader reader = new BufferedReader(new FileReader(file));
         String line;
+        long count = 0;
         while ((line = reader.readLine()) != null) {
             ingestLine(line);
+            count++;
         }
         d4mtw.flushBuffers();
+        log.info("NodesReader: ingested "+count+" taxIDs in file "+file.getName());
     }
 
     public void ingestLine(String line) {
@@ -42,7 +47,7 @@ public class NodesReader {
         Text rank =          new Text("rank|"+fields.get(2) );         // genus
         Text divisionDesc =  new Text("division|"+divInfo.get(Integer.parseInt(fields.get(4))));
 
-        if (!taxID.equals("1"))
+        if (!taxID.toString().equals("1"))
             d4mtw.ingestRow(taxID, parentTaxID);
         d4mtw.ingestRow(taxID, rank);
         d4mtw.ingestRow(taxID, divisionDesc);

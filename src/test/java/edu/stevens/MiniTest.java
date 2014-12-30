@@ -215,9 +215,35 @@ public class MiniTest {
     public void testInsertNodeData() throws AccumuloSecurityException, AccumuloException, IOException, TableNotFoundException {
         File f = TestFileReader.getTestFile("nodes_cut.dmp");
         Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
-        Map<Integer, String> divMap = DivisionReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
-        NodesReader nr = new NodesReader(divMap, conn);
-        nr.ingestFile(f);
+        Map<Integer, String> divMap = TaxReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
+        TaxReader nr = new TaxReader(divMap, conn);
+        nr.ingestNodesFile(f);
+
+        // read back
+        Scanner scan = conn.createScanner("Ttax", Authorizations.EMPTY);
+        System.out.println("Ttax:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("TtaxT", Authorizations.EMPTY);
+        System.out.println("TtaxT:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+
+        conn.tableOperations().delete("Ttax");
+        conn.tableOperations().delete("TtaxT");
+    }
+
+    @Test
+    public void testInsertNameData() throws AccumuloSecurityException, AccumuloException, IOException, TableNotFoundException {
+        File f = TestFileReader.getTestFile("names_cut.dmp");
+        Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
+        Map<Integer, String> divMap = TaxReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
+        TaxReader nr = new TaxReader(divMap, conn);
+        nr.ingestNamesFile(f);
 
         // read back
         Scanner scan = conn.createScanner("Ttax", Authorizations.EMPTY);

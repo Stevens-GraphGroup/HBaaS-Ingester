@@ -4,11 +4,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.biojava3.core.sequence.ProteinSequence;
 import org.biojava3.core.sequence.io.FastaReaderHelper;
-import org.biojava3.core.sequence.io.GenbankReaderHelper;
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExternalResource;
 
 import java.io.File;
 import java.io.IOException;
@@ -88,7 +85,7 @@ public class SimpleTests {
     public void testReadDivision() throws IOException {
 
         File file = TestFileReader.getTestFile("division.dmp");
-        Map<Integer,String> map = DivisionReader.readDivisions(file);
+        Map<Integer,String> map = TaxReader.readDivisions(file);
         log.debug("MAP: "+map);
         Assert.assertEquals("Phages", map.get(3));
     }
@@ -97,12 +94,12 @@ public class SimpleTests {
     @Test
     public void testReadDivisionLine() {
         String s = "0\t|\tBCT\t|\tBacteria\t|\t\t|";
-        List<String> list = DivisionReader.readLine(s);
+        List<String> list = TaxReader.readTabPipeLine(s);
         String[] exp = new String[] {"0", "BCT", "Bacteria", ""};
         Assert.assertEquals(Arrays.asList(exp), list);
 
         String s2 = "8\t|\tUNA\t|\tUnassigned\t|\tNo species nodes should inherit this division assignment\t|";
-        List<String> list2 = DivisionReader.readLine(s2);
+        List<String> list2 = TaxReader.readTabPipeLine(s2);
         String[] exp2 = new String[] {"8", "UNA", "Unassigned", "No species nodes should inherit this division assignment"};
         Assert.assertEquals(Arrays.asList(exp2), list2);
     }

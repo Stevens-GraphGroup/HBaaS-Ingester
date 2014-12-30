@@ -40,18 +40,16 @@ public class App
     }
 
     /** Need NCBI genbank files in dir, some/all can be gunzipped */
-    public static void ingestProteins(File dir) throws AccumuloSecurityException, AccumuloException {
+    public static void ingestProteins(File dir, Connector conn) throws AccumuloSecurityException, AccumuloException {
         log.info("START ingestProteins: "+dir);
-        Connector conn = setupAccumuloConnector();
         //File dir = new File("/data/NCBI-ASN1-PROTEIN-FASTA/ftp.ncbi.nih.gov/ncbi-asn1/protein_fasta");
         MassProteinSeqIngest ingest = new MassProteinSeqIngest(conn);
         ingest.insertDirectory(dir);
     }
 
     /** Need divisions.dmp, nodes.dmp, names.dmp */
-    public static void ingestTaxNames(File dir) throws IOException {
-        log.info("START ingestTaxNames: "+dir);
-        Connector conn = setupAccumuloConnector();
+    public static void ingestTaxNodesNames(File dir, Connector conn) throws IOException {
+        log.info("START  ingestTaxNodesNames: "+dir);
 
         File fDiv = new File(dir, "division.dmp");
         if (!fDiv.exists())
@@ -63,22 +61,22 @@ public class App
         if (!fNames.exists())
             throw new FileNotFoundException("names.dmp is not in dir: "+dir);
 
-        Map<Integer, String> divMap = DivisionReader.readDivisions(fDiv);
-        log.info("ingestTaxNames: finished division.dmp");
+        Map<Integer, String> divMap = TaxReader.readDivisions(fDiv);
+        log.info("ingestTaxNodesNames: finished division.dmp");
 
-        NodesReader nr = new NodesReader(divMap, conn);
-        nr.ingestFile(fNodes);
-        log.info("ingestTaxNames: finished nodes.dmp");
-
-        throw new RuntimeException("not yet implemented");
-
-        //log.info("ingestTaxNames: finished names.dmp");
+        TaxReader nr = new TaxReader(divMap, conn);
+        nr.ingestNodesFile(fNodes);
+        nr.ingestNamesFile(fNames);
+        log.info("FINISH ingestTaxNodesNames: "+dir);
     }
 
     /** Need gi_taxid_prot.dmp */
-    public static void ingestTaxLink(File dir) {
-        log.info("START ingestTaxLink: "+dir);
-        Connector conn = setupAccumuloConnector();
+    public static void ingestTaxLink(File dir, Connector conn) {
+        log.info("START  ingestTaxLink: "+dir);
+
+        // TODO
+
+        log.info("FINISH ingestTaxLink: "+dir);
         throw new RuntimeException("not yet implemented");
     }
 
@@ -100,7 +98,7 @@ public class App
 
     public static void main( String[] args ) throws AccumuloSecurityException, AccumuloException, IOException {
         Options options = new Options();
-        Option o1 = new Option("w", true, "what to do (ingestProteins,ingestTaxNames,ingestTaxLink)");
+        Option o1 = new Option("w", true, "what to do (ingestProteins,ingestTaxNodesNames,ingestTaxLink)");
         o1.setRequired(true);
         o1.setValueSeparator(',');
         options.addOption(o1);
@@ -121,16 +119,17 @@ public class App
         String dtax = line.getOptionValue("dtax", ".");
         File fprot = mustGetDirFile(dprot);
         File ftax = mustGetDirFile(dtax);
+        Connector conn = setupAccumuloConnector();
         for(String w : line.getOptionValues('w')) {
             switch(w) {
                 case "ingestProteins":
-                    ingestProteins(fprot);
+                    ingestProteins(fprot, conn);
                     break;
-                case "ingestTaxNames":
-                    ingestTaxNames(ftax);
+                case "ingestTaxNodesNames":
+                    ingestTaxNodesNames(ftax, conn);
                     break;
                 case "ingestTaxLink":
-                    ingestTaxLink(ftax);
+                    ingestTaxLink(ftax, conn);
                     break;
                 default:
                     failHelp("bad option: "+w, options);

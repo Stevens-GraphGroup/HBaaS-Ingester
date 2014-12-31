@@ -13,8 +13,6 @@ import org.apache.accumulo.core.security.Authorizations;
 
 import java.io.*;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,8 +24,8 @@ public class TaxLinkReader {
     private final D4MTableWriter d4mtw;
     private boolean isClosed = false;
 
-    private List<Integer> giNotInDB = new LinkedList<>();
     private int countOk = 0;
+    private BufferedWriter bw = null;
 
     public TaxLinkReader(Connector connector) {
         this.connector = connector;
@@ -38,11 +36,24 @@ public class TaxLinkReader {
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
         d4mtw.createTablesSoft();
+        try {
+            bw = new BufferedWriter(new FileWriter("giNotInDB.dmp"));
+        } catch (IOException e) {
+            log.warn("unable to create writer of bad sequences to file: giNotInDB.dmp.  Will not log gi's not in Accumulo DB.", e);
+            bw = null;
+        }
     }
 
     public void close() {
         isClosed = true;
         d4mtw.closeIngest();
+        if (bw != null)
+            try {
+                bw.close();
+            } catch (IOException ein) {
+                log.warn("failed to close BatchWriter to giNotInDB.dmp during close() method; assigning to null",ein);
+            }
+        bw = null;
     }
 
     @Override
@@ -81,20 +92,25 @@ public class TaxLinkReader {
         reader.close();
         scanner.close();
         d4mtw.flushBuffers();
-        writeBadGTToFile();
+        bw.flush();
         log.info("TaxLinkReader: ingestTaxLinkFile: out of "+count+" gi-taxID pairs from file "+file.getName()+". ingested "+countOk+" accID-taxID pairs (that have gi's in the database)");
     }
 
-    private void writeBadGTToFile() {
+    private void writeBadGTToFile(int giBad) {
+        if (bw == null) {
+            return;
+        }
         try {
-            BufferedWriter bw = new BufferedWriter(new FileWriter("giNotInDB.dmp"));
-            for (Integer giBad : giNotInDB) {
-                bw.write(giBad.toString());
-                bw.write('\n');
-            }
-            bw.close();
+            bw.write(Integer.toString(giBad));
+            bw.write('\n');
         } catch (IOException e) {
             log.warn("error writing to giNotInDB.dmp",e);
+            try {
+                bw.close();
+            } catch (IOException ein) {
+                log.warn("failed to close BatchWriter to giNotInDB.dmp after error; assigning to null",ein);
+            }
+            bw = null;
         }
     }
 
@@ -122,8 +138,10 @@ public class TaxLinkReader {
             giDB = Integer.parseInt( giString );
         }
         if (giDB != giTarget) {
-            log.debug("cannot find gi " + giTarget + " in database (next gi is " + giDB + " or no more gi's in database)");
-            giNotInDB.add(giTarget);
+            if (bw == null)
+                log.debug("no bad gi file writer and cannot find gi " + giTarget + " in database (next gi is " + giDB + " or no more gi's in database)");
+            else
+                writeBadGTToFile(giTarget);
         } else {
             Text accID = k.getColumnQualifier();
             d4mtw.ingestRow(accID, TaxReader.formatTaxID(taxID));

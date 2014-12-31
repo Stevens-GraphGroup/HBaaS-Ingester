@@ -7,19 +7,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class TaxReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
-    private final Map<Integer, String> divInfo;
     private final Connector connector;
     private final D4MTableWriter d4mtw;
+    private boolean isClosed = false;
 
-    public TaxReader(Map<Integer, String> divInfo, Connector connector) {
-        this.divInfo = divInfo;
+    public TaxReader(Connector connector) {
         this.connector = connector;
         D4MTableWriter.D4MTableConfig config = new D4MTableWriter.D4MTableConfig();
         config.baseName = "Ttax";
@@ -28,6 +24,18 @@ public class TaxReader {
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
     }
+
+    public void close() {
+        isClosed = true;
+        d4mtw.closeIngest();
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+        close();
+    }
+
 
     public static Map<Integer, String> readDivisions(File file) throws IOException {
         BufferedReader reader = new BufferedReader(new FileReader(file));
@@ -39,6 +47,7 @@ public class TaxReader {
             String desc = li.get(2);
             map.put(integer, desc);
         }
+        reader.close();
         return map;
     }
 
@@ -60,19 +69,24 @@ public class TaxReader {
         return li;
     }
 
-    public void ingestNodesFile(File file) throws IOException {
+    public void ingestNodesFile(Map<Integer, String> divInfo, File file) throws IOException {
+        if (isClosed)
+            throw new IllegalStateException(this+" isClosed");
         BufferedReader reader = new BufferedReader(new FileReader(file));
         String line;
         long count = 0;
         while ((line = reader.readLine()) != null) {
-            ingestNodesLine(line);
+            ingestNodesLine(divInfo, line);
             count++;
         }
+        reader.close();
         d4mtw.flushBuffers();
         log.info("TaxReader: ingestNodesFile: ingested "+count+" taxIDs in file "+file.getName());
     }
 
     public void ingestNamesFile(File file) throws IOException {
+        if (isClosed)
+            throw new IllegalStateException(this+" isClosed");
         BufferedReader reader = new BufferedReader(new FileReader(file));
         String line;
         long count = 0;
@@ -80,11 +94,12 @@ public class TaxReader {
             ingestNamesLine(line);
             count++;
         }
+        reader.close();
         d4mtw.flushBuffers();
         log.info("TaxReader: ingestNamesFile: ingested "+count+" names in file "+file.getName());
     }
 
-    public void ingestNodesLine(String line) {
+    private void ingestNodesLine(Map<Integer, String> divInfo, String line) {
         List<String> fields = readTabPipeLine(line);
         Text taxID =         formatTaxID(fields.get(0));     // 0002077
         Text parentTaxID =   formatTaxID(fields.get(1));     // 0186821
@@ -109,7 +124,7 @@ public class TaxReader {
 
     // 7	|	Azorhizobium caulinodans	|		|	scientific name	|
     // 7	|	Azorhizobium caulinodans Dreyfus et al. 1988	|		|	synonym	|
-    public void ingestNamesLine(String line) {
+    private void ingestNamesLine(String line) {
         List<String> fields = TaxReader.readTabPipeLine(line);
         Text taxID =         formatTaxID(fields.get(0));     // 0002077
         String thename = fields.get(1);
@@ -126,5 +141,7 @@ public class TaxReader {
             d4mtw.ingestRow(taxID, col);
         }
     }
+
+
 
 }

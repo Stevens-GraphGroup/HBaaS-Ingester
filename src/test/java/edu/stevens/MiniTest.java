@@ -10,6 +10,7 @@ import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
 import org.junit.Assert;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -166,20 +167,6 @@ public class MiniTest {
 
         // read back
         Scanner scan = conn.createScanner("TseqRaw", Authorizations.EMPTY);
-//        Key startKey = new Key(new Text("d"), cf, cq);
-//        Range rng = new Range(startKey,null,true,false,false,true);
-//        scan.setRange(rng);// (new Key("d"));
-//        System.out.println(tableName+" table:");
-//        Iterator<Map.Entry<Key, Value>> iterator = scan.iterator();
-//        Key k2 = new Key(new Text("ddd"), cf, cq);
-//        Key k3 = new Key(new Text("pogo"), cf, cq);
-//        Map.Entry<Key, Value> r1 = iterator.next();
-//        assertTrue(k2.equals(r1.getKey(), PartialKey.ROW_COLFAM_COLQUAL_COLVIS));
-//        assertEquals(v,r1.getValue());
-//        Map.Entry<Key, Value> r2 = iterator.next();
-//        assertTrue(k3.equals(r2.getKey(),PartialKey.ROW_COLFAM_COLQUAL_COLVIS));
-//        assertEquals(v,r2.getValue());
-//        assertFalse(iterator.hasNext());
 
         System.out.println("TseqRaw:  ");
         for (Map.Entry<Key, Value> kv : scan) {
@@ -212,12 +199,14 @@ public class MiniTest {
     }
 
     @Test
+    @Ignore
     public void testInsertNodeData() throws AccumuloSecurityException, AccumuloException, IOException, TableNotFoundException {
         File f = TestFileReader.getTestFile("nodes_cut.dmp");
         Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
         Map<Integer, String> divMap = TaxReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
-        TaxReader nr = new TaxReader(divMap, conn);
-        nr.ingestNodesFile(f);
+        TaxReader nr = new TaxReader(conn);
+        nr.ingestNodesFile(divMap, f);
+        nr.close();
 
         // read back
         Scanner scan = conn.createScanner("Ttax", Authorizations.EMPTY);
@@ -238,12 +227,50 @@ public class MiniTest {
     }
 
     @Test
+    @Ignore
     public void testInsertNameData() throws AccumuloSecurityException, AccumuloException, IOException, TableNotFoundException {
         File f = TestFileReader.getTestFile("names_cut.dmp");
         Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
         Map<Integer, String> divMap = TaxReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
-        TaxReader nr = new TaxReader(divMap, conn);
+        TaxReader nr = new TaxReader(conn);
         nr.ingestNamesFile(f);
+        nr.close();
+
+        // read back
+        Scanner scan = conn.createScanner("Ttax", Authorizations.EMPTY);
+        System.out.println("Ttax:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("TtaxT", Authorizations.EMPTY);
+        System.out.println("TtaxT:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+
+        conn.tableOperations().delete("Ttax");
+        conn.tableOperations().delete("TtaxT");
+    }
+
+    @Test
+    public void testInsertNodesNamesLinks() throws AccumuloSecurityException, AccumuloException, IOException, TableNotFoundException {
+        File fNodes = TestFileReader.getTestFile("nodes_cut.dmp");
+        File fNames = TestFileReader.getTestFile("names_cut.dmp");
+        Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
+        Map<Integer, String> divMap = TaxReader.readDivisions(TestFileReader.getTestFile("division.dmp"));
+        TaxReader nr = new TaxReader(conn);
+        nr.ingestNodesFile(divMap, fNodes);
+        nr.ingestNamesFile(fNames);
+        nr.close();
+
+        /*  NEED TO INGEST ALL DOG DATA TO MAKE WORK
+        File fLink = TestFileReader.getTestFile("gi_taxid_prot_cut.dmp");
+        TaxLinkReader tlr = new TaxLinkReader(conn);
+        tlr.ingestTaxLinkFile(fLink);
+        tlr.close();
+        */
 
         // read back
         Scanner scan = conn.createScanner("Ttax", Authorizations.EMPTY);

@@ -64,18 +64,24 @@ public class App
         Map<Integer, String> divMap = TaxReader.readDivisions(fDiv);
         log.info("ingestTaxNodesNames: finished division.dmp");
 
-        TaxReader nr = new TaxReader(divMap, conn);
-        nr.ingestNodesFile(fNodes);
+        TaxReader nr = new TaxReader(conn);
+        nr.ingestNodesFile(divMap, fNodes);
         nr.ingestNamesFile(fNames);
+        nr.close();
         log.info("FINISH ingestTaxNodesNames: "+dir);
     }
 
     /** Need gi_taxid_prot.dmp */
-    public static void ingestTaxLink(File dir, Connector conn) {
+    public static void ingestTaxLink(File dir, Connector conn) throws IOException {
         log.info("START  ingestTaxLink: "+dir);
 
-        // TODO
+        TaxLinkReader tlr = new TaxLinkReader(conn);
+        File fLink = new File(dir, "gi_taxid_prot.dmp");
+        if (!fLink.exists())
+            throw new FileNotFoundException("gi_taxid_prot.dmp is not in dir: "+dir);
 
+        tlr.ingestTaxLinkFile(fLink);
+        tlr.close();
         log.info("FINISH ingestTaxLink: "+dir);
         throw new RuntimeException("not yet implemented");
     }

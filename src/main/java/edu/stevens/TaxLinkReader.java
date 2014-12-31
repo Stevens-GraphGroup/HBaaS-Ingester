@@ -25,7 +25,7 @@ public class TaxLinkReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
     private final Connector connector;
     private final D4MTableWriter d4mtw;
-    private final TableWriter twTDeg;
+    private final TableWriter twTDeg, twDeg;
     public static final Text DEG_CHILD_ACC = new Text("degChildAcc");
     private boolean isClosed = false;
 
@@ -42,7 +42,8 @@ public class TaxLinkReader {
         d4mtw = new D4MTableWriter(config);
         d4mtw.createTablesSoft();
         twTDeg = new TableWriter("TtaxTDeg", connector, D4MTableWriter.makeDegreeATC()); //TableWriter.EMPTYCF, DEG_CHILD_ACC
-        twTDeg.createTablesSoft();
+        twDeg = new TableWriter("TtaxDeg", connector, D4MTableWriter.makeDegreeATC());
+        //twTDeg.createTablesSoft();
         try {
             bw = new BufferedWriter(new FileWriter("giNotInDB.dmp"));
         } catch (IOException e) {
@@ -55,6 +56,7 @@ public class TaxLinkReader {
         isClosed = true;
         d4mtw.closeIngest();
         twTDeg.closeIngest();
+        twDeg.closeIngest();
         if (bw != null)
             try {
                 bw.close();
@@ -100,6 +102,8 @@ public class TaxLinkReader {
         reader.close();
         scanner.close();
         d4mtw.flushBuffers();
+        twTDeg.flushBuffer();
+        twDeg.flushBuffer();
         bw.flush();
         log.info("TaxLinkReader: ingestTaxLinkFile: out of "+count+" gi-taxID pairs from file "+file.getName()+". ingested "+countOk+" accID-taxID pairs (that have gi's in the database)");
     }
@@ -121,6 +125,8 @@ public class TaxLinkReader {
             bw = null;
         }
     }
+
+    private static final Text DEG_ROW_ACC = new Text("accid");
 
 
     private Key ingestTaxLinkLine(Key k, Iterator<Map.Entry<Key, Value>> iterator, String line) {
@@ -154,6 +160,7 @@ public class TaxLinkReader {
             Text accID = k.getColumnQualifier();
             Text formattedTaxID = TaxReader.formatTaxID(taxID);
             d4mtw.ingestRow(accID, formattedTaxID);
+            twDeg.ingestRow(DEG_ROW_ACC, D4MTableWriter.DEFAULT_DEGCOL);
             twTDeg.ingestRow(formattedTaxID, DEG_CHILD_ACC);
             countOk++;
         }

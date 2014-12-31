@@ -285,9 +285,23 @@ public class MiniTest {
             System.out.println(kv);
         }
         scan.close();
+        scan = conn.createScanner("TtaxDeg", Authorizations.EMPTY);
+        System.out.println("TtaxDeg:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("TtaxTDeg", Authorizations.EMPTY);
+        System.out.println("TtaxTDeg:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
 
         conn.tableOperations().delete("Ttax");
         conn.tableOperations().delete("TtaxT");
+        conn.tableOperations().delete("TtaxTDeg");
+        conn.tableOperations().delete("TtaxDeg");
     }
 
 }

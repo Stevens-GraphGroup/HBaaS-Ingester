@@ -13,7 +13,7 @@ public class TaxReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
     private final Connector connector;
     private final D4MTableWriter d4mtw;
-    private final TableWriter twTDeg;
+    private final TableWriter twTDeg, twDeg;
     public static final Text DEG_CHILD_TAX = new Text("degChildTax");
     private boolean isClosed = false;
 
@@ -26,12 +26,14 @@ public class TaxReader {
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
         twTDeg = new TableWriter("TtaxTDeg", connector, D4MTableWriter.makeDegreeATC()); //TableWriter.EMPTYCF, DEG_CHILD_TAX
+        twDeg = new TableWriter("TtaxDeg", connector, D4MTableWriter.makeDegreeATC());
     }
 
     public void close() {
         isClosed = true;
         d4mtw.closeIngest();
         twTDeg.closeIngest();
+        twDeg.closeIngest();
     }
 
     @Override
@@ -85,6 +87,7 @@ public class TaxReader {
         }
         reader.close();
         d4mtw.flushBuffers();
+        twTDeg.flushBuffer();
         log.info("TaxReader: ingestNodesFile: ingested "+count+" taxIDs in file "+file.getName());
     }
 
@@ -94,12 +97,14 @@ public class TaxReader {
         BufferedReader reader = new BufferedReader(new FileReader(file));
         String line;
         long count = 0;
+        int prevTaxInt = -1;
         while ((line = reader.readLine()) != null) {
-            ingestNamesLine(line);
+            prevTaxInt = ingestNamesLine(prevTaxInt, line);
             count++;
         }
         reader.close();
         d4mtw.flushBuffers();
+        twDeg.flushBuffer();
         log.info("TaxReader: ingestNamesFile: ingested "+count+" names in file "+file.getName());
     }
 
@@ -127,12 +132,16 @@ public class TaxReader {
 
 
     static final String SCINAME = "scientific name";
+    private static final Text DEG_ROW_TAX = new Text("taxid");
 
     // 7	|	Azorhizobium caulinodans	|		|	scientific name	|
     // 7	|	Azorhizobium caulinodans Dreyfus et al. 1988	|		|	synonym	|
-    private void ingestNamesLine(String line) {
+    /** Passes in the taxID as an int of the previous line. If we moved onto a new taxID line, then increment the degree counter. */
+    private int ingestNamesLine(int prevTaxInt, String line) {
         List<String> fields = TaxReader.readTabPipeLine(line);
-        Text taxID =         formatTaxID(fields.get(0));     // 0002077
+        String taxString = fields.get(0);
+        int taxInt = Integer.parseInt(taxString);
+        Text taxID =         formatTaxID(taxString);     // 0002077
         String thename = fields.get(1);
         String nametype = fields.get(3);
 
@@ -146,6 +155,11 @@ public class TaxReader {
                 log.warn("warning: name "+thename+" contains bad character \"|\"");
             d4mtw.ingestRow(taxID, col);
         }
+
+        if (taxInt != prevTaxInt) {
+            twDeg.ingestRow(DEG_ROW_TAX, D4MTableWriter.DEFAULT_DEGCOL);
+        }
+        return taxInt;
     }
 
 

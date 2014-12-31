@@ -33,7 +33,7 @@ public class ProteinSeqIngest {
         config.cf = CF;
         d4MTables = new D4MTableWriter(config);
         TseqRaw = new TableWriter("TseqRaw",conn);
-        TseqTDeg = new TableWriter("TseqTDeg",conn,D4MTableWriter.makeDegreeATC(CF,CQdeg));
+        TseqTDeg = new TableWriter("TseqTDeg",conn,D4MTableWriter.makeDegreeATC()); //CF,CQdeg
     }
 
     /**
@@ -60,7 +60,7 @@ public class ProteinSeqIngest {
     /**
      *
      * @param accID     "BAC05839.1"
-     * @param seqRaw
+     * @param seqRaw    GVDFAKSARKDLVLSDGN...
      * @param desc      NULLABLE "seven transmembrane helix receptor, partial [Homo sapiens]"
      * @param seqProps  NULLABLE "gi|21928500", "dbj|BAC05839.1"
      */

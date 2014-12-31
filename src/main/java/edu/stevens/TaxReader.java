@@ -13,6 +13,8 @@ public class TaxReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
     private final Connector connector;
     private final D4MTableWriter d4mtw;
+    private final TableWriter twTDeg;
+    public static final Text DEG_CHILD_TAX = new Text("degChildTax");
     private boolean isClosed = false;
 
     public TaxReader(Connector connector) {
@@ -23,11 +25,13 @@ public class TaxReader {
         config.useTableDeg = config.useTableTDeg = false;
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
+        twTDeg = new TableWriter("TtaxTDeg", connector, D4MTableWriter.makeDegreeATC()); //TableWriter.EMPTYCF, DEG_CHILD_TAX
     }
 
     public void close() {
         isClosed = true;
         d4mtw.closeIngest();
+        twTDeg.closeIngest();
     }
 
     @Override
@@ -106,8 +110,10 @@ public class TaxReader {
         Text rank =          new Text("rank|"+fields.get(2) );         // genus
         Text divisionDesc =  new Text("division|"+divInfo.get(Integer.parseInt(fields.get(4))));
 
-        if (!taxID.toString().equals("1"))
+        if (!taxID.toString().equals("1")) {
             d4mtw.ingestRow(taxID, parentTaxID);
+            twTDeg.ingestRow(parentTaxID, DEG_CHILD_TAX);
+        }
         d4mtw.ingestRow(taxID, rank);
         d4mtw.ingestRow(taxID, divisionDesc);
     }

@@ -5,6 +5,7 @@ import org.apache.accumulo.core.client.*;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.Combiner;
+import org.apache.accumulo.core.iterators.IteratorUtil;
 import org.apache.accumulo.core.iterators.LongCombiner;
 import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.hadoop.io.Text;
@@ -12,6 +13,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
 import static edu.stevens.TableWriter.State;
 import static edu.stevens.TableWriter.createTableSoft;
 
@@ -68,25 +73,95 @@ public class D4MTableWriter {
             BtableTDeg=null;
     private MultiTableBatchWriter mtbw;
 
-    public static void assignDegreeAccumulator(Text cf, Text degCol, String tableName, Connector c) {
-        IteratorSetting cfg = new IteratorSetting(19, "sum_"+cf+'_'+degCol, SummingCombiner.class);
-        Combiner.setColumns(cfg, Collections.singletonList(new IteratorSetting.Column(cf, degCol)));
-        Combiner.setCombineAllColumns(cfg, false);
-        LongCombiner.setEncodingType(cfg, LongCombiner.Type.STRING);
+    @Deprecated
+    public static void assignDegreeAccumulator(List<IteratorSetting.Column> columnList, String tableName, Connector c) {
+        IteratorSetting cfg = null;
         try {
-            c.tableOperations().attachIterator(tableName, cfg);
-        } catch (AccumuloSecurityException | AccumuloException e) {
-            log.warn("error trying to add iterator to "+tableName, e);
+            cfg = c.tableOperations().getIteratorSetting(tableName, "sum", IteratorUtil.IteratorScope.scan);
+        } catch (AccumuloSecurityException | AccumuloException ignored) {
+
         } catch (TableNotFoundException e) {
-            log.error("impossible!",e);
+            log.warn(tableName + " does not exist", e);
+        }
+
+        if (cfg != null) {
+            log.info("table "+tableName+": iterator sum already exists with priority "+cfg.getPriority()+" and options: "+cfg.getOptions());
+
+        } else {
+            cfg = new IteratorSetting(19, "sum" + columnList.size(), SummingCombiner.class);
+            Combiner.setColumns(cfg, columnList);
+            Combiner.setCombineAllColumns(cfg, false);
+            LongCombiner.setEncodingType(cfg, LongCombiner.Type.STRING);
+            try {
+                //c.tableOperations().checkIteratorConflicts(tableName, cfg, EnumSet.allOf(IteratorUtil.IteratorScope.class));
+                c.tableOperations().attachIterator(tableName, cfg);
+            } catch (AccumuloSecurityException | AccumuloException e) {
+                log.warn("error trying to add iterator to " + tableName, e);
+            } catch (TableNotFoundException e) {
+                log.warn(tableName + " does not exist", e);
+            }
         }
     }
 
+    private static final String ITER_SUMALL_NAME = "sumAll";
+
+    /** Put a SummingIterator on all columns. */
+    public static void assignDegreeAccumulator(String tableName, Connector c) {
+        IteratorSetting cfg = null;
+        try {
+            cfg = c.tableOperations().getIteratorSetting(tableName, ITER_SUMALL_NAME, IteratorUtil.IteratorScope.scan);
+        } catch (AccumuloSecurityException | AccumuloException ignored) {
+
+        } catch (TableNotFoundException e) {
+            log.warn(tableName + " does not exist", e);
+        }
+
+        if (cfg != null) {
+            log.info("table "+tableName+": iterator "+ITER_SUMALL_NAME+" already exists with priority "+cfg.getPriority()+" and options: "+cfg.getOptions());
+
+        } else {
+            cfg = new IteratorSetting(19, ITER_SUMALL_NAME, SummingCombiner.class);
+            //Combiner.setColumns(cfg, columnList);
+            Combiner.setCombineAllColumns(cfg, true);
+            LongCombiner.setEncodingType(cfg, LongCombiner.Type.STRING);
+            try {
+                //c.tableOperations().checkIteratorConflicts(tableName, cfg, EnumSet.allOf(IteratorUtil.IteratorScope.class));
+                c.tableOperations().attachIterator(tableName, cfg);
+            } catch (AccumuloSecurityException | AccumuloException e) {
+                log.warn("error trying to add "+ITER_SUMALL_NAME+" iterator to " + tableName, e);
+            } catch (TableNotFoundException e) {
+                log.warn(tableName + " does not exist", e);
+            }
+        }
+    }
+
+    public static TableWriter.AfterTableCreate makeDegreeATC() {
+        return new TableWriter.AfterTableCreate() {
+            @Override
+            public void afterTableCreate(String tableName, Connector c) {
+                assignDegreeAccumulator(tableName, c);
+            }
+        };
+    }
+
+    /** Use this for one degree column. */
+    @Deprecated
     public static TableWriter.AfterTableCreate makeDegreeATC(final Text cf, final Text degCol) {
         return new TableWriter.AfterTableCreate() {
             @Override
             public void afterTableCreate(String tableName, Connector c) {
-                assignDegreeAccumulator(cf, degCol, tableName, c);
+                assignDegreeAccumulator(Collections.singletonList(new IteratorSetting.Column(cf, degCol)), tableName, c);
+            }
+        };
+    }
+
+    /** Use this for multiple degree columns. */
+    @Deprecated
+    public static TableWriter.AfterTableCreate makeDegreeATC(final List<IteratorSetting.Column> columnList) {
+        return new TableWriter.AfterTableCreate() {
+            @Override
+            public void afterTableCreate(String tableName, Connector c) {
+                assignDegreeAccumulator(columnList, tableName, c);
             }
         };
     }
@@ -116,8 +191,9 @@ public class D4MTableWriter {
         if (tconf.useTableT)     createTableSoft(TNtableT, tconf.connector);
         if (tconf.useTableDeg)  btDeg = createTableSoft(TNtableDeg, tconf.connector);
         if (tconf.useTableTDeg) btTDeg = createTableSoft(TNtableTDeg, tconf.connector);
-        if (btDeg)  assignDegreeAccumulator(tconf.cf, tconf.textDegCol, TNtableDeg, tconf.connector);
-        if (btTDeg) assignDegreeAccumulator(tconf.cf, tconf.textDegCol, TNtableTDeg, tconf.connector);
+        List<IteratorSetting.Column> columns = Collections.singletonList(new IteratorSetting.Column(tconf.cf, tconf.textDegCol));
+        if (btDeg)  assignDegreeAccumulator(columns, TNtableDeg, tconf.connector);
+        if (btTDeg) assignDegreeAccumulator(columns, TNtableTDeg, tconf.connector);
     }
 
     public void openIngest() {

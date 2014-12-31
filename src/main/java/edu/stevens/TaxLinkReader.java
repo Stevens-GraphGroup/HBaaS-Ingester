@@ -1,6 +1,7 @@
 package edu.stevens;
 
 import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.data.Key;
@@ -12,7 +13,9 @@ import org.apache.logging.log4j.Logger;
 import org.apache.accumulo.core.security.Authorizations;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,6 +25,8 @@ public class TaxLinkReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
     private final Connector connector;
     private final D4MTableWriter d4mtw;
+    private final TableWriter twTDeg;
+    public static final Text DEG_CHILD_ACC = new Text("degChildAcc");
     private boolean isClosed = false;
 
     private int countOk = 0;
@@ -36,6 +41,8 @@ public class TaxLinkReader {
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
         d4mtw.createTablesSoft();
+        twTDeg = new TableWriter("TtaxTDeg", connector, D4MTableWriter.makeDegreeATC()); //TableWriter.EMPTYCF, DEG_CHILD_ACC
+        twTDeg.createTablesSoft();
         try {
             bw = new BufferedWriter(new FileWriter("giNotInDB.dmp"));
         } catch (IOException e) {
@@ -47,6 +54,7 @@ public class TaxLinkReader {
     public void close() {
         isClosed = true;
         d4mtw.closeIngest();
+        twTDeg.closeIngest();
         if (bw != null)
             try {
                 bw.close();
@@ -144,7 +152,9 @@ public class TaxLinkReader {
                 writeBadGTToFile(giTarget);
         } else {
             Text accID = k.getColumnQualifier();
-            d4mtw.ingestRow(accID, TaxReader.formatTaxID(taxID));
+            Text formattedTaxID = TaxReader.formatTaxID(taxID);
+            d4mtw.ingestRow(accID, formattedTaxID);
+            twTDeg.ingestRow(formattedTaxID, DEG_CHILD_ACC);
             countOk++;
         }
         return k;

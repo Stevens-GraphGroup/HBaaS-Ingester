@@ -83,7 +83,6 @@ public class App
         tlr.ingestTaxLinkFile(fLink);
         tlr.close();
         log.info("FINISH ingestTaxLink: "+dir);
-        throw new RuntimeException("not yet implemented");
     }
 
     private static File mustGetDirFile(String str) {

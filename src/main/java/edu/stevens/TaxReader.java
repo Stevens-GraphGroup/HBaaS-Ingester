@@ -147,7 +147,7 @@ public class TaxReader {
 //            d4mtw.ingestRow(taxID, col);
 //
 //        } else {
-            Text col = new Text(thename+"|"+nametype);
+            Text col = new Text(nametype+"|"+thename);
             if (thename.indexOf('|') != -1)
                 log.warn("warning: name "+thename+" contains bad character \"|\"");
             d4mtw.ingestRow(taxID, col);

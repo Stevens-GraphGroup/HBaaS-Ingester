@@ -10,7 +10,9 @@ import org.biojava3.core.sequence.ProteinSequence;
 
 /**
  * Insert protein seqeunces into Accumulo following the schema in the project docs.
+ * Needs updating in light of Matlab D4M.
  */
+@Deprecated
 public class ProteinSeqIngest {
     private static final Logger log = LogManager.getLogger(ProteinSeqIngest.class);
 
@@ -27,7 +29,7 @@ public class ProteinSeqIngest {
     public ProteinSeqIngest(Connector conn) {
         D4MTableWriter.D4MTableConfig config = new D4MTableWriter.D4MTableConfig();
         config.useTable = config.useTableT  = true;
-        config.useTableTDeg = config.useTableDeg = false;
+        config.useTableDegT = config.useTableDeg = false;
         config.connector = conn;
         config.baseName = "Tseq";
         config.cf = CF;

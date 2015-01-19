@@ -1,7 +1,6 @@
 package edu.stevens;
 
 import org.apache.accumulo.core.client.Connector;
-import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.data.Key;
@@ -13,14 +12,14 @@ import org.apache.logging.log4j.Logger;
 import org.apache.accumulo.core.security.Authorizations;
 
 import java.io.*;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Assumes that gi_taxid_prot.dmp is in increasing gi order.
+ * This file needs updating; obsoleted on upgrade to new schema.
  */
+@Deprecated
 public class TaxLinkReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
     private final Connector connector;
@@ -37,7 +36,7 @@ public class TaxLinkReader {
         D4MTableWriter.D4MTableConfig config = new D4MTableWriter.D4MTableConfig();
         config.baseName = "Ttax";
         config.useTable = config.useTableT = true;
-        config.useTableDeg = config.useTableTDeg = false;
+        config.useTableDeg = config.useTableDegT = false;
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
         d4mtw.createTablesSoft();
@@ -158,7 +157,7 @@ public class TaxLinkReader {
                 writeBadGTToFile(giTarget);
         } else {
             Text accID = k.getColumnQualifier();
-            Text formattedTaxID = TaxReader.formatTaxID(taxID);
+            Text formattedTaxID = new Text(taxID);
             d4mtw.ingestRow(accID, formattedTaxID);
             twDeg.ingestRow(DEG_ROW_ACC, D4MTableWriter.DEFAULT_DEGCOL);
             twTDeg.ingestRow(formattedTaxID, DEG_CHILD_ACC);

@@ -13,9 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 
 import static edu.stevens.TableWriter.State;
 import static edu.stevens.TableWriter.createTableSoft;
@@ -43,7 +41,9 @@ public class D4MTableWriter {
                 useTable = false,
                 useTableT = false,
                 useTableDeg = false,
-                useTableTDeg = false;
+                useTableDegT = false,
+                useTableField = false,
+                useTableFieldT = false;
         public Text textDegCol = DEFAULT_DEGCOL;
         public Text cf = TableWriter.EMPTYCF;
         /** The number of bytes until we flush data to the server. */
@@ -57,7 +57,9 @@ public class D4MTableWriter {
             useTable = c.useTable;
             useTableT = c.useTableT;
             useTableDeg = c.useTableDeg;
-            useTableTDeg = c.useTableTDeg;
+            useTableDegT = c.useTableDegT;
+            useTableField = c.useTableField;
+            useTableFieldT = c.useTableFieldT;
             textDegCol = c.textDegCol;
             batchBytes = c.batchBytes;
             cf = c.cf;
@@ -65,12 +67,14 @@ public class D4MTableWriter {
     }
     private final D4MTableConfig tconf;
 
-    private String TNtable,TNtableT,TNtableDeg,TNtableTDeg;
+    private String TNtable,TNtableT,TNtableDeg, TNtableDegT, TNtableField, TNtableFieldT;
     private BatchWriter
             Btable=null,
             BtableT=null,
             BtableDeg=null,
-            BtableTDeg=null;
+            BtableDegT =null,
+            BtableField=null,
+            BtableFieldT=null;
     private MultiTableBatchWriter mtbw;
 
     @Deprecated
@@ -177,7 +181,9 @@ public class D4MTableWriter {
         if (tconf.useTable)     TNtable=baseName;
         if (tconf.useTableT)    TNtableT=baseName+"T";
         if (tconf.useTableDeg)  TNtableDeg=baseName+"Deg";
-        if (tconf.useTableTDeg) TNtableTDeg=baseName + "TDeg";
+        if (tconf.useTableDegT) TNtableDegT =baseName + "DegT";
+        if (tconf.useTableField) TNtableField =baseName + "Field";
+        if (tconf.useTableFieldT) TNtableFieldT =baseName + "FieldT";
     }
 
 
@@ -186,14 +192,18 @@ public class D4MTableWriter {
      * Sets up iterators on degree tables if enabled.
      */
     public void createTablesSoft() {
-        boolean btDeg=false, btTDeg=false;
+        boolean btDeg=false, btDegT=false, btField=false, btFieldT=false;
         if (tconf.useTable)     createTableSoft(TNtable, tconf.connector);
         if (tconf.useTableT)     createTableSoft(TNtableT, tconf.connector);
         if (tconf.useTableDeg)  btDeg = createTableSoft(TNtableDeg, tconf.connector);
-        if (tconf.useTableTDeg) btTDeg = createTableSoft(TNtableTDeg, tconf.connector);
-        List<IteratorSetting.Column> columns = Collections.singletonList(new IteratorSetting.Column(tconf.cf, tconf.textDegCol));
-        if (btDeg)  assignDegreeAccumulator(columns, TNtableDeg, tconf.connector);
-        if (btTDeg) assignDegreeAccumulator(columns, TNtableTDeg, tconf.connector);
+        if (tconf.useTableDegT) btDegT = createTableSoft(TNtableDegT, tconf.connector);
+        if (tconf.useTableField) btField = createTableSoft(TNtableField, tconf.connector);
+        if (tconf.useTableFieldT) btFieldT = createTableSoft(TNtableFieldT, tconf.connector);
+        //List<IteratorSetting.Column> columns = Collections.singletonList(new IteratorSetting.Column(tconf.cf, tconf.textDegCol));
+        if (btDeg)  assignDegreeAccumulator(TNtableDeg, tconf.connector);
+        if (btDegT) assignDegreeAccumulator(TNtableDegT, tconf.connector);
+        if (btField) assignDegreeAccumulator(TNtableField, tconf.connector);
+        if (btFieldT) assignDegreeAccumulator(TNtableFieldT, tconf.connector);
     }
 
     public void openIngest() {
@@ -210,7 +220,9 @@ public class D4MTableWriter {
             if (tconf.useTable) Btable         = mtbw.getBatchWriter(TNtable);
             if (tconf.useTableT) BtableT       = mtbw.getBatchWriter(TNtableT);
             if (tconf.useTableDeg) BtableDeg   = mtbw.getBatchWriter(TNtableDeg);
-            if (tconf.useTableTDeg) BtableTDeg = mtbw.getBatchWriter(TNtableTDeg);
+            if (tconf.useTableDegT) BtableDegT = mtbw.getBatchWriter(TNtableDegT);
+            if (tconf.useTableField) BtableField = mtbw.getBatchWriter(TNtableField);
+            if (tconf.useTableFieldT) BtableFieldT = mtbw.getBatchWriter(TNtableFieldT);
         } catch (TableNotFoundException e) {
             log.error("impossible! Tables should have been created!", e);
         } catch (AccumuloSecurityException | AccumuloException e) {
@@ -238,7 +250,9 @@ public class D4MTableWriter {
         Btable     = null;
         BtableT    = null;
         BtableDeg  = null;
-        BtableTDeg = null;
+        BtableDegT = null;
+        BtableField = null;
+        BtableFieldT = null;
         try {
             mtbw.close();
         } catch (MutationsRejectedException e) {
@@ -254,6 +268,8 @@ public class D4MTableWriter {
             closeIngest();
     }
 
+    public static final char FIELD_SEPERATOR = '|';
+
     /** Use "1" as the Value. */
     public void ingestRow(Text rowID, Text cq) {
         ingestRow(rowID, cq, TableWriter.VALONE);
@@ -265,7 +281,27 @@ public class D4MTableWriter {
         if (tconf.useTable)     ingestRow(Btable    , rowID, tconf.cf, cq, v);
         if (tconf.useTableT)    ingestRow(BtableT   , cq, tconf.cf, rowID, v);
         if (tconf.useTableDeg)  ingestRow(BtableDeg , rowID, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
-        if (tconf.useTableTDeg) ingestRow(BtableTDeg, cq, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
+        if (tconf.useTableDegT) ingestRow(BtableDegT, cq, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
+        if (tconf.useTableField) {
+            String rowIDString = rowID.toString();
+            int fieldSepPos;
+            if ((fieldSepPos = rowIDString.indexOf(FIELD_SEPERATOR)) == -1)
+                log.warn(TNtableField +" is turned on, but the row "+rowIDString+" to ingest does not have a field seperator "+FIELD_SEPERATOR);
+            else {
+                Text rowIDField = new Text(rowIDString.substring(0, fieldSepPos));
+                ingestRow(BtableField, rowIDField, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
+            }
+        }
+        if (tconf.useTableFieldT){
+            String cqString = cq.toString();
+            int fieldSepPos;
+            if ((fieldSepPos = cqString.indexOf(FIELD_SEPERATOR)) == -1)
+                log.warn(TNtableFieldT +" is turned on, but the row "+cqString+" to ingest does not have a field seperator "+FIELD_SEPERATOR);
+            else {
+                Text cqField = new Text(cqString.substring(0, fieldSepPos));
+                ingestRow(BtableFieldT, cqField, tconf.cf, tconf.textDegCol, TableWriter.VALONE);
+            }
+        }
     }
 
     public static void ingestRow(BatchWriter bw, Text rowID, Text cf, Text cq, Value v) {

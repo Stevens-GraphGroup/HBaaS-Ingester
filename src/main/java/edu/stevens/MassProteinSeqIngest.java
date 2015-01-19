@@ -18,7 +18,9 @@ import java.util.zip.GZIPInputStream;
 
 /**
  * Insert all the protein sequences in a file or folder.
+ * Needs updating in light of Matlab D4M.
  */
+@Deprecated
 public class MassProteinSeqIngest {
     private ProteinSeqIngest psi;
     //private final Connector connector;

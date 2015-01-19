@@ -61,7 +61,7 @@ public class TableWriter {
         this.batchBytes = batchBytes;
     }
 
-    /** Create a table if not already existing. */
+    /** Create a table if not already existing. Return whether table created. */
     public static boolean createTableSoft(String tableName, Connector c) {
         TableOperations to = c.tableOperations();
         try {

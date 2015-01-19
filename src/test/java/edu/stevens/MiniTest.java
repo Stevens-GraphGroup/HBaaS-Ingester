@@ -159,6 +159,7 @@ public class MiniTest {
     }
 
     @Test
+    @Ignore
     public void testInsertProteinFile() throws AccumuloSecurityException, AccumuloException, TableNotFoundException {
         File f = TestFileReader.getTestFile("gbpri1_cut.fsa_aa");
         Connector conn = tester.getInstance().getConnector(tester.getUser(), new PasswordToken(tester.getPassword()));
@@ -185,8 +186,8 @@ public class MiniTest {
             System.out.println(kv);
         }
         scan.close();
-        scan = conn.createScanner("TseqTDeg",Authorizations.EMPTY);
-        System.out.println("TseqTDeg  :  ");
+        scan = conn.createScanner("TseqDegT",Authorizations.EMPTY);
+        System.out.println("TseqDegT  :  ");
         for (Map.Entry<Key, Value> kv : scan) {
             System.out.println(kv);
         }
@@ -195,7 +196,7 @@ public class MiniTest {
         conn.tableOperations().delete("TseqRaw");
         conn.tableOperations().delete("Tseq");
         conn.tableOperations().delete("TseqT");
-        conn.tableOperations().delete("TseqTDeg");
+        conn.tableOperations().delete("TseqDegT");
     }
 
     @Test
@@ -291,8 +292,14 @@ public class MiniTest {
             System.out.println(kv);
         }
         scan.close();
-        scan = conn.createScanner("TtaxTDeg", Authorizations.EMPTY);
-        System.out.println("TtaxTDeg:  ");
+        scan = conn.createScanner("TtaxDegT", Authorizations.EMPTY);
+        System.out.println("TtaxDegT:  ");
+        for (Map.Entry<Key, Value> kv : scan) {
+            System.out.println(kv);
+        }
+        scan.close();
+        scan = conn.createScanner("TtaxFieldT", Authorizations.EMPTY);
+        System.out.println("TtaxFieldT:  ");
         for (Map.Entry<Key, Value> kv : scan) {
             System.out.println(kv);
         }
@@ -300,8 +307,9 @@ public class MiniTest {
 
         conn.tableOperations().delete("Ttax");
         conn.tableOperations().delete("TtaxT");
-        conn.tableOperations().delete("TtaxTDeg");
+        conn.tableOperations().delete("TtaxDegT");
         conn.tableOperations().delete("TtaxDeg");
+        conn.tableOperations().delete("TtaxFieldT");
     }
 
 }

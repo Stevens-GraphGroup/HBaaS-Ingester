@@ -13,8 +13,8 @@ public class TaxReader {
     private static final Logger log = LogManager.getLogger(TaxReader.class);
     private final Connector connector;
     private final D4MTableWriter d4mtw;
-    private final TableWriter twTDeg, twDeg;
-    public static final Text DEG_CHILD_TAX = new Text("degChildTax");
+    //private final TableWriter twTDeg, twDeg;
+    //public static final Text DEG_CHILD_TAX = new Text("degChildTax");
     private boolean isClosed = false;
 
     public TaxReader(Connector connector) {
@@ -22,18 +22,18 @@ public class TaxReader {
         D4MTableWriter.D4MTableConfig config = new D4MTableWriter.D4MTableConfig();
         config.baseName = "Ttax";
         config.useTable = config.useTableT = true;
-        config.useTableDeg = config.useTableTDeg = false;
+        config.useTableDeg = config.useTableDegT = true;
+        config.useTableField = false;
+        config.useTableFieldT = true;
         config.connector = connector;
         d4mtw = new D4MTableWriter(config);
-        twTDeg = new TableWriter("TtaxTDeg", connector, D4MTableWriter.makeDegreeATC()); //TableWriter.EMPTYCF, DEG_CHILD_TAX
-        twDeg = new TableWriter("TtaxDeg", connector, D4MTableWriter.makeDegreeATC());
+//        twTDeg = new TableWriter("TtaxTDeg", connector, D4MTableWriter.makeDegreeATC()); //TableWriter.EMPTYCF, DEG_CHILD_TAX
+//        twDeg = new TableWriter("TtaxDeg", connector, D4MTableWriter.makeDegreeATC());
     }
 
     public void close() {
         isClosed = true;
         d4mtw.closeIngest();
-        twTDeg.closeIngest();
-        twDeg.closeIngest();
     }
 
     @Override
@@ -87,7 +87,6 @@ public class TaxReader {
         }
         reader.close();
         d4mtw.flushBuffers();
-        twTDeg.flushBuffer();
         log.info("TaxReader: ingestNodesFile: ingested "+count+" taxIDs in file "+file.getName());
     }
 
@@ -104,35 +103,33 @@ public class TaxReader {
         }
         reader.close();
         d4mtw.flushBuffers();
-        twDeg.flushBuffer();
         log.info("TaxReader: ingestNamesFile: ingested "+count+" names in file "+file.getName());
     }
 
     private void ingestNodesLine(Map<Integer, String> divInfo, String line) {
         List<String> fields = readTabPipeLine(line);
-        Text taxID =         formatTaxID(fields.get(0));     // 0002077
-        Text parentTaxID =   formatTaxID(fields.get(1));     // 0186821
+        Text taxID =         new Text(fields.get(0));     // 0002077
+        Text parentTaxID =   new Text("parent|"+fields.get(1));     // 0186821
         Text rank =          new Text("rank|"+fields.get(2) );         // genus
         Text divisionDesc =  new Text("division|"+divInfo.get(Integer.parseInt(fields.get(4))));
 
         if (!taxID.toString().equals("1")) {
             d4mtw.ingestRow(taxID, parentTaxID);
-            twTDeg.ingestRow(parentTaxID, DEG_CHILD_TAX);
         }
         d4mtw.ingestRow(taxID, rank);
         d4mtw.ingestRow(taxID, divisionDesc);
     }
 
-    public static final int PADLENGTH_taxid = 7;
+    public static final int PADLENGTH_taxid = 0;
 
-    static Text formatTaxID(String taxID) {
-        String padded = StringUtils.leftPad(taxID, PADLENGTH_taxid, '0');  // pad to 9 digits
-        return new Text("taxid|"+padded);
-    }
+//    static Text formatTaxID(String taxID) {
+//        String padded = StringUtils.leftPad(taxID, PADLENGTH_taxid, '0');  // pad to 9 digits
+//        return new Text("taxid|"+padded);
+//    }
 
 
-    static final String SCINAME = "scientific name";
-    private static final Text DEG_ROW_TAX = new Text("taxid");
+//    static final String SCINAME = "scientific name";
+//    private static final Text DEG_ROW_TAX = new Text("taxid");
 
     // 7	|	Azorhizobium caulinodans	|		|	scientific name	|
     // 7	|	Azorhizobium caulinodans Dreyfus et al. 1988	|		|	synonym	|
@@ -141,24 +138,24 @@ public class TaxReader {
         List<String> fields = TaxReader.readTabPipeLine(line);
         String taxString = fields.get(0);
         int taxInt = Integer.parseInt(taxString);
-        Text taxID =         formatTaxID(taxString);     // 0002077
+        Text taxID =         new Text(taxString);     // 0002077
         String thename = fields.get(1);
         String nametype = fields.get(3);
 
-        if (nametype.equals(SCINAME)) {
-            Text col = new Text("sciname|"+thename);
-            d4mtw.ingestRow(taxID, col);
-
-        } else {
-            Text col = new Text("othername|"+thename+"|"+nametype);
+//        if (nametype.equals(SCINAME)) {
+//            Text col = new Text("sciname|"+thename);
+//            d4mtw.ingestRow(taxID, col);
+//
+//        } else {
+            Text col = new Text(thename+"|"+nametype);
             if (thename.indexOf('|') != -1)
                 log.warn("warning: name "+thename+" contains bad character \"|\"");
             d4mtw.ingestRow(taxID, col);
-        }
+//        }
 
-        if (taxInt != prevTaxInt) {
-            twDeg.ingestRow(DEG_ROW_TAX, D4MTableWriter.DEFAULT_DEGCOL);
-        }
+//        if (taxInt != prevTaxInt) {
+//            twDeg.ingestRow(DEG_ROW_TAX, D4MTableWriter.DEFAULT_DEGCOL);
+//        }
         return taxInt;
     }
 
